@@ -1,5 +1,4 @@
-import os, re, time, json, discord, requests
-from selenium.webdriver.common.by import By
+import os, re, time, discord, requests
 from datetime import datetime
 
 os_path_slash = "\\" # default Windows
@@ -150,8 +149,7 @@ async def on_message(message):
     embed = discord.Embed()
     embed.set_author(name='New World Server Status & Population', url='https://newworldstatus.com/', icon_url='http://i.imgur.com/lDF4O4s.jpg') # https://imgur.com/a/paxI6xX
     embed.title = '%s 的伺服器狀態'%(world_name)
-    embed.url = 'https://newworldstatus.com/worlds/%s'%(game_server_name.lower().replace(' ', '-')) #This URL will be hooked up to the title of the embed
-    # embed.description = ''
+    embed.url = 'https://newworldstatus.com/worlds/%s'%(game_server_name.lower().replace(' ', '-'))
 
     embed.add_field(name='狀態', value=world_status, inline=True)
     embed.add_field(name='線上人數', value=str(now_players), inline=True)
