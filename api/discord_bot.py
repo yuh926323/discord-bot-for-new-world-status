@@ -145,6 +145,9 @@ async def on_message(message):
     average_wait = convertMinuteToHumanReadTime(int(result['queue_wait_time_minutes']))
     world_status = result['status_enum']
 
+    if world_status == 'ENUM_FAILED_BITBANG_UNPACK':
+        average_wait = '不明的伺服器狀態，無法預估'
+
     # 處理嵌入內容
     embed = discord.Embed()
     embed.set_author(name='New World Server Status & Population', url='https://newworldstatus.com/', icon_url='http://i.imgur.com/lDF4O4s.jpg') # https://imgur.com/a/paxI6xX
