@@ -1,5 +1,6 @@
 import json
 import os, re, time, discord, requests
+from urllib.parse import urlencode, quote, quote_plus
 from datetime import datetime
 
 os_path_slash = "\\" # default Windows
@@ -71,9 +72,8 @@ def storeLog(content):
     file_object.close()
 
 def getWorldInfoByWorldName(world_name):
-    url = "https://firstlight.newworldstatus.com/ext/v1/worlds/%s"%(world_name)
+    url = "https://nwdb.info/server-status/servers.json"
     headers = {
-        'Authorization': 'Bearer %s'%(envs['NEW_WORLD_STATUS_API_SECRET_KEY']),
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
         'Accept': '*/*',
         'Connection': 'keep-alive',
@@ -90,7 +90,24 @@ def getWorldInfoByWorldName(world_name):
         storeLog('呼叫 API 無法正確取得資料，success: %s'%(result['success']))
         return {}
 
-    return result['message']
+    for server_info in result['data']['servers']:
+        nwdb_world_name = server_info[4].lower().replace(' ', '-')
+        if nwdb_world_name == world_name:
+            return {
+                'population_cap': server_info[0],
+                'now_players': server_info[1],
+                'in_queue': server_info[2],
+
+                'world_name': server_info[4],
+                'world_set': server_info[5],
+                'region': server_info[6],
+
+                'world_status': server_info[8],
+
+                'world_code': server_info[10],
+            }
+
+    return {}
 
 def getWorldTerritories(world_name):
     try:
@@ -167,45 +184,33 @@ async def on_message(message):
         await discord_message.edit(content=msg)
         return
 
-    if territory:
-        world_name = territory['name']
-    else:
-        world_name = ''
-        for part in game_server_name.replace('-', ' ').split(' '):
-            world_name += part.capitalize() + ' '
-        world_name = world_name.strip()
-    now_players = result['players_current']
-    in_queue = result['queue_current']
-    average_wait = convertMinuteToHumanReadTime(int(result['queue_wait_time_minutes']))
-    world_status = result['status_enum']
-
-    if world_status == 'ENUM_FAILED_BITBANG_UNPACK':
-        average_wait = '不明的伺服器狀態，無法預估'
-
     # 處理嵌入內容
     embed = discord.Embed()
     if territory:
-        embed.set_image(url=territory['mapImage'])
-    embed.set_author(name='New World Server Status & Population', url='https://newworldstatus.com/', icon_url='http://i.imgur.com/lDF4O4s.jpg') # https://imgur.com/a/paxI6xX
-    embed.title = '%s 的伺服器狀態'%(world_name)
-    embed.url = 'https://newworldstatus.com/worlds/%s'%(game_server_name.lower().replace(' ', '-'))
+        embed.set_image(url=quote(territory['mapImage'], safe=':/'))
+    embed.set_author(
+        name='New World Database Server Status & Population',
+        url='https://nwdb.info/server-status',
+        icon_url='http://i.imgur.com/lDF4O4s.jpg'
+    ) # https://imgur.com/a/paxI6xX
+    embed.title = '%s 的伺服器狀態'%(result['world_name'])
+    embed.url = 'https://nwdb.info/server-status'
 
-    embed.add_field(name='狀態', value=world_status, inline=True)
-    embed.add_field(name='線上人數', value=str(now_players), inline=True)
-    embed.add_field(name='排隊人數', value=str(in_queue), inline=True)
-    embed.add_field(name='預估等待時間', value=average_wait, inline=True)
+    embed.add_field(name='狀態', value=result['world_status'], inline=True)
+    embed.add_field(name='線上人數', value=str(result['now_players']), inline=True)
+    embed.add_field(name='排隊人數', value=str(result['in_queue']), inline=True)
 
     embed.timestamp = datetime.utcnow()
     embed.set_footer(text='查詢耗時 %.2f 秒'%((time.time() - catch_time)))
     embed.color = 15548997 # red
-    if int(now_players) >= 1750:
+    if result['now_players'] >= 1750:
         embed.color = 16705372 # yellow
-    if world_status == 'ACTIVE':
+    if result['world_status'] == 'ACTIVE':
         embed.color = 5763719 # green
-    if world_status == 'UNKNOWN':
+    if result['world_status'] == 'UNKNOWN':
         embed.color = 9807270 # grey
 
-    content = "查詢耗時: %.2f 秒, %s 狀態 [%s], 遊玩人數: %s, 排隊人數: %s, 預估時間: %s"%((time.time() - catch_time), world_name, world_status, str(now_players), str(in_queue), average_wait)
+    content = "查詢耗時: %.2f 秒, %s 狀態 [%s], 遊玩人數: %s, 排隊人數: %s"%((time.time() - catch_time), result['world_name'], result['world_status'], str(result['now_players']), str(result['in_queue']))
     print(content)
     storeLog(content)
     await discord_message.delete()
