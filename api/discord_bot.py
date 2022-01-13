@@ -1,3 +1,4 @@
+import json
 import os, re, time, discord, requests
 from datetime import datetime
 
@@ -91,6 +92,35 @@ def getWorldInfoByWorldName(world_name):
 
     return result['message']
 
+def getWorldTerritories(world_name):
+    try:
+        file_object = open(__dir__ + '/territories.json', 'r', encoding="utf-8")
+        json_data = file_object.read()
+        file_object.close()
+    except:
+        url = "https://nwmaps.info"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36',
+            'Accept': '*/*',
+            'Connection': 'keep-alive',
+        }
+        response = requests.request("GET", url, headers=headers)
+
+        json_search = re.search('<script id="__NEXT_DATA__" type="application/json">(.*)</script></body></html>', response.text())
+        if not json_search:
+            return []
+        json_data = json_search[1]
+
+        file_object = open(__dir__ + '/territories.json', 'w', encoding="utf-8")
+        file_object.write(json_data)
+        file_object.close()
+    else:
+        json_data = json.loads(json_data)
+        worlds = json_data['props']['pageProps']['serverList']['servers']
+        for world in worlds:
+            if world['name'].lower().replace(' ', '-') == world_name:
+                return world
+
 envs = readenv()
 
 # client 是我們與Discord連結的橋樑
@@ -128,6 +158,7 @@ async def on_message(message):
 
     # 這邊打 API 取得必要資訊
     result = getWorldInfoByWorldName(game_server_name.lower().replace(' ', '-'))
+    territory = getWorldTerritories(game_server_name.lower().replace(' ', '-'))
 
     if not result:
         msg = '找不到指定世界 %s 的資料'%(game_server_name)
@@ -136,10 +167,13 @@ async def on_message(message):
         await discord_message.edit(content=msg)
         return
 
-    world_name = ''
-    for part in game_server_name.replace('-', ' ').split(' '):
-        world_name += part.capitalize() + ' '
-    world_name = world_name.strip()
+    if territory:
+        world_name = territory['name']
+    else:
+        world_name = ''
+        for part in game_server_name.replace('-', ' ').split(' '):
+            world_name += part.capitalize() + ' '
+        world_name = world_name.strip()
     now_players = result['players_current']
     in_queue = result['queue_current']
     average_wait = convertMinuteToHumanReadTime(int(result['queue_wait_time_minutes']))
@@ -150,6 +184,8 @@ async def on_message(message):
 
     # 處理嵌入內容
     embed = discord.Embed()
+    if territory:
+        embed.set_image(url=territory['mapImage'])
     embed.set_author(name='New World Server Status & Population', url='https://newworldstatus.com/', icon_url='http://i.imgur.com/lDF4O4s.jpg') # https://imgur.com/a/paxI6xX
     embed.title = '%s 的伺服器狀態'%(world_name)
     embed.url = 'https://newworldstatus.com/worlds/%s'%(game_server_name.lower().replace(' ', '-'))
